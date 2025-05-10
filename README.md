@@ -7,5 +7,5 @@ Wird die gewünschte Temperatur erreicht oder fällt die Einspeisung dauerhaft u
 
 Es ist zu empfehlen das Gerät von einem Fachmann Installieren und anschließen zu lassen.
 
-Um den Bleprint in HA einzufügen gehe zu Einstellungen -> Automationen und Szenen -> Blueprints 
+Um den Bleprint in HA einzufügen gehe zu: Einstellungen -> Automationen und Szenen -> Blueprints 
 und klicke dann auf "Blueprint importieren" und füge diesen Link ein: https://github.com/JojoLP7306/home-assistant-kleinspeicher-pv-automation/blob/main/blueprint.yaml
