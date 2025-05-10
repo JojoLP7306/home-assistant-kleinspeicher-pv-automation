@@ -1,0 +1,149 @@
+blueprint:
+  name: Kleinspeicher Steuerung (mit Hysterese und PV-Überschuss)
+  description: >
+    Dieser Blueprint steuert einen 5-Liter-Durchlauferhitzer (!!Druckfest!!) („Kleinspeicher“) zur
+    effizienten Nutzung von PV-Stromüberschuss. Der Kleinspeicher ist hydraulisch
+    am Kaltwasserzulauf des Hauptwarmwasserspeichers angeschlossen und pumpt bei
+    ausreichend PV-Energie erwärmtes Wasser über ein Strangregulierventil in den
+    Zirkulationseingang zurück in den Speicher.
+
+    Das Strangregulierventil dient dazu nur eine bestimmte menge Wasser durchzulassen
+    damit der Kleinspeicher genug zeit hat das Wasser zu erwährmen. Ich habe mein
+    Strangregulierventil auf 28 Liter pro Minute eingestellt.
+
+    Den oberen Temperatur Wert zur Abschaltung am besten auf 69 Grad Celsius stehen lassen
+    da ab dieser Temperatur keine effiziente Erwährmung mehr Stattfindet und der Kleinspeicher
+    viel ein und aus taktet.
+
+    Die Automation schaltet den Kleinspeicher ein, wenn die Netz Einspeisung aus der PV-
+    Anlage einen konfigurierbaren Schwellenwert überschreitet (bitte Mindest 200 Watt Puffer lassen) 
+    und der Warmwasserspeicher unter einer bestimmten Temperatur liegt. Die Pumpe wird dabei mit
+    zeitlicher Verzögerung aktiviert, um eine Vorwärmung sicherzustellen. 
+
+    Wird die gewünschte Temperatur erreicht oder fällt die Einspeisung dauerhaft
+    unter einen Mindestwert, schaltet die Steuerung den Kleinspeicher automatisch
+    wieder ab. So wird überschüssige Sonnenenergie gezielt zur Warmwasser-
+    unterstützung genutzt, ohne Netzstrom zu verbrauchen.
+  domain: automation
+  input:
+    sensor_einspeisung:
+      name: Stromsensor Einspeisung
+      selector:
+        entity:
+          domain: sensor
+    sensor_temperatur:
+      name: Temperatursensor Speicher
+      selector:
+        entity:
+          domain: sensor
+    switch_speicher:
+      name: Schalter Kleinspeicher
+      selector:
+        entity:
+          domain: switch
+    switch_pumpe:
+      name: Schalter Pumpe
+      selector:
+        entity:
+          domain: switch
+    einspeisung_ein:
+      name: Mindest-Einspeisung zum Einschalten (W)
+      default: 2100
+      selector:
+        number:
+          min: 0
+          max: 10000
+          unit_of_measurement: W
+    einspeisung_aus:
+      name: Einspeisung zum Abschalten (W)
+      default: 200
+      selector:
+        number:
+          min: 0
+          max: 10000
+          unit_of_measurement: W
+    temperatur_ein:
+      name: Temperaturgrenze zum Einschalten (°C)
+      default: 66
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: °C
+    temperatur_aus:
+      name: Temperaturgrenze zum Abschalten (°C)
+      default: 69
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: °C
+    verzögerung_pumpe:
+      name: Verzögerung vor Pumpenstart (HH:MM:SS)
+      default: "00:05:00"
+      selector:
+        text:
+    abschaltverzögerung:
+      name: Verzögerung bei Strommangel (HH:MM:SS)
+      default: "00:02:00"
+      selector:
+        text:
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input sensor_einspeisung
+    above: !input einspeisung_ein
+    for: "00:02:00"
+  - platform: numeric_state
+    entity_id: !input sensor_temperatur
+    above: !input temperatur_aus
+    for: "00:10:00"
+  - platform: numeric_state
+    entity_id: !input sensor_einspeisung
+    below: !input einspeisung_aus
+    for: "00:02:00"
+
+action:
+  - choose:
+      - conditions:
+          - condition: and
+            conditions:
+              - condition: numeric_state
+                entity_id: !input sensor_einspeisung
+                above: !input einspeisung_ein
+              - condition: numeric_state
+                entity_id: !input sensor_temperatur
+                below: !input temperatur_ein
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: !input switch_speicher
+          - delay: !input verzögerung_pumpe
+          - service: switch.turn_on
+            target:
+              entity_id: !input switch_pumpe
+
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input sensor_temperatur
+            above: !input temperatur_aus
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id:
+                - !input switch_pumpe
+                - !input switch_speicher
+
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input sensor_einspeisung
+            below: !input einspeisung_aus
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: !input switch_speicher
+          - delay: !input abschaltverzögerung
+          - service: switch.turn_off
+            target:
+              entity_id: !input switch_pumpe
+    default: []
